@@ -17,29 +17,19 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r lan_voice_call/requirements.txt
 
-      - name: Download opus.dll
+      - name: Build & install opus via vcpkg
         shell: pwsh
         run: |
-          $ProgressPreference = 'SilentlyContinue'
           New-Item -ItemType Directory -Force -Path .\dll | Out-Null
-          if (-not (Test-Path .\dll\opus.dll)) {
-            $url = 'https://github.com/xiph/opus/releases/download/v1.5.2/opus-1.5.2.zip'
-            $tmp = Join-Path $env:TEMP 'opus.zip'
-            Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
-            Expand-Archive -Path $tmp -DestinationPath (Join-Path $env:TEMP 'opus_extract') -Force
-            $src = Get-ChildItem -Path (Join-Path $env:TEMP 'opus_extract') -Recurse -Filter 'opus.dll' | Select-Object -First 1
-            if (-not $src) {
-              $src = Get-ChildItem -Path (Join-Path $env:TEMP 'opus_extract') -Recurse -Filter 'libopus-0.dll' | Select-Object -First 1
-            }
-            Copy-Item $src.FullName .\dll\opus.dll -Force
-            Write-Host "Downloaded opus.dll"
-          }
+          & C:\vcpkg\vcpkg install opus:x64-windows
+          Copy-Item C:\vcpkg\installed\x64-windows\bin\opus.dll .\dll\opus.dll
+          Write-Host "Installed opus.dll via vcpkg"
 
       - name: Build exe with PyInstaller
         shell: pwsh
