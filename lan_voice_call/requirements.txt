@@ -1,0 +1,11 @@
+# LAN Voice Call - Python dependencies
+# Tested with Python 3.10 / 3.11 / 3.12 on Windows 10/11
+#
+# Install on Windows:  pip install -r requirements.txt
+# Then build the exe:  build.bat
+
+PyQt5==5.15.11
+sounddevice==0.5.5
+numpy>=1.24,<3.0
+opuslib==3.0.1
+pyinstaller==6.21.0
