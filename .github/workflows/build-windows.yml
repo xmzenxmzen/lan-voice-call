@@ -1,0 +1,58 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r lan_voice_call/requirements.txt
+
+      - name: Build & install opus via vcpkg
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\dll | Out-Null
+          & C:\vcpkg\vcpkg install opus:x64-windows
+          Copy-Item C:\vcpkg\installed\x64-windows\bin\opus.dll .\dll\opus.dll
+          Write-Host "Installed opus.dll via vcpkg"
+
+      - name: Build exe with PyInstaller
+        shell: pwsh
+        run: pyinstaller --noconfirm --clean LANVoiceCall.spec
+
+      - name: Verify build
+        shell: pwsh
+        run: |
+          if (-not (Test-Path .\dist\LANVoiceCall\LANVoiceCall.exe)) {
+            Write-Error "Build output not found"
+            exit 1
+          }
+          $size = (Get-ChildItem -Recurse .\dist\LANVoiceCall | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Build size: $([math]::Round($size/1MB, 1)) MB"
+
+      - name: Zip the distribution
+        shell: pwsh
+        run: Compress-Archive -Path .\dist\LANVoiceCall -DestinationPath .\LANVoiceCall-windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LANVoiceCall-windows
+          path: LANVoiceCall-windows.zip
+          retention-days: 90
+          if-no-files-found: error
