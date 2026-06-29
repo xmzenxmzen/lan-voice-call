@@ -1,0 +1,68 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r lan_voice_call/requirements.txt
+
+      - name: Download opus.dll
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          New-Item -ItemType Directory -Force -Path .\dll | Out-Null
+          if (-not (Test-Path .\dll\opus.dll)) {
+            $url = 'https://github.com/xiph/opus/releases/download/v1.5.2/opus-1.5.2.zip'
+            $tmp = Join-Path $env:TEMP 'opus.zip'
+            Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
+            Expand-Archive -Path $tmp -DestinationPath (Join-Path $env:TEMP 'opus_extract') -Force
+            $src = Get-ChildItem -Path (Join-Path $env:TEMP 'opus_extract') -Recurse -Filter 'opus.dll' | Select-Object -First 1
+            if (-not $src) {
+              $src = Get-ChildItem -Path (Join-Path $env:TEMP 'opus_extract') -Recurse -Filter 'libopus-0.dll' | Select-Object -First 1
+            }
+            Copy-Item $src.FullName .\dll\opus.dll -Force
+            Write-Host "Downloaded opus.dll"
+          }
+
+      - name: Build exe with PyInstaller
+        shell: pwsh
+        run: pyinstaller --noconfirm --clean LANVoiceCall.spec
+
+      - name: Verify build
+        shell: pwsh
+        run: |
+          if (-not (Test-Path .\dist\LANVoiceCall\LANVoiceCall.exe)) {
+            Write-Error "Build output not found"
+            exit 1
+          }
+          $size = (Get-ChildItem -Recurse .\dist\LANVoiceCall | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Build size: $([math]::Round($size/1MB, 1)) MB"
+
+      - name: Zip the distribution
+        shell: pwsh
+        run: Compress-Archive -Path .\dist\LANVoiceCall -DestinationPath .\LANVoiceCall-windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LANVoiceCall-windows
+          path: LANVoiceCall-windows.zip
+          retention-days: 90
+          if-no-files-found: error
